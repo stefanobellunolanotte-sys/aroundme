@@ -83,6 +83,13 @@ const icons: Record<string, L.Icon> = {
   }),
 };
 
+// 📍 Icona posizione utente
+const userIcon = new L.Icon({
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/4876/4876905.png", // icona GPS azzurra
+  iconSize: [38, 38],
+  iconAnchor: [19, 38],
+});
+
 function App() {
   // 🧠 Stati principali
   const [pois, setPois] = useState<Poi[]>([]);
@@ -94,11 +101,11 @@ function App() {
   const [position, setPosition] = useState<[number, number] | null>(null);
   const [status, setStatus] = useState("Caricamento...");
   const [toast, setToast] = useState<string | null>(null);
-  const [mode, setMode] = useState<"walking" | "auto">("walking"); // 👈 modalità utente
+  const [mode, setMode] = useState<"walking" | "auto">("walking");
 
   const lastSpokenPOI = useRef<string | null>(null);
 
-  // 🧭 Ottieni e aggiorna posizione dinamicamente
+  // 🧭 Ottieni posizione dinamicamente
   useEffect(() => {
     if (!navigator.geolocation) {
       setStatus("Geolocalizzazione non supportata");
@@ -121,17 +128,14 @@ function App() {
       setStatus("Errore nella geolocalizzazione");
     };
 
-    // ⚙️ Impostazioni diverse per "auto" o "a piedi"
     const options = {
       enableHighAccuracy: true,
       maximumAge: mode === "auto" ? 1000 : 5000,
       timeout: mode === "auto" ? 2000 : 10000,
     };
 
-    // Attiva il monitoraggio GPS continuo
     watchId = navigator.geolocation.watchPosition(updatePosition, handleError, options);
 
-    // 💡 Fallback: in auto aggiorna anche ogni 2s via polling
     let pollInterval: NodeJS.Timeout | null = null;
     if (mode === "auto") {
       pollInterval = setInterval(() => {
@@ -184,12 +188,12 @@ function App() {
     const a =
       Math.sin(dLat / 2) ** 2 +
       Math.cos(lat1 * Math.PI / 180) *
-      Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) ** 2;
+        Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  // 🗣️ Narrazione automatica (entro 1 km)
+  // 🗣️ Narrazione automatica (entro 100 m)
   useEffect(() => {
     if (!position || pois.length === 0) return;
 
@@ -238,7 +242,6 @@ function App() {
     setFilteredPois(results);
   }, [selectedCategory, searchTerm, radius, pois, position]);
 
-  // 🔊 Lettura manuale
   const handlePOIClick = (poi: Poi) => {
     const description = `${poi.name}, categoria ${poi.category}. ${
       poi.elevation ? `Altitudine ${poi.elevation} metri. ` : ""
@@ -246,7 +249,6 @@ function App() {
     speak(description, setToast);
   };
 
-  // ⏹️ Ferma voce
   const stopSpeech = () => {
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -257,7 +259,6 @@ function App() {
   // 🌍 INTERFACCIA COMPLETA
   return (
     <div style={{ height: "100vh", width: "100vw" }}>
-      {/* 🗺️ MAPPA PRINCIPALE */}
       {position && (
         <MapContainer center={position} zoom={9} style={{ height: "100%", width: "100%" }}>
           <TileLayer
@@ -266,12 +267,6 @@ function App() {
           />
 
           {/* 📍 Posizione utente */}
-          const userIcon = new L.Icon({
-            iconUrl: "https://cdn-icons-png.flaticon.com/512/4876/4876905.png", // icona GPS azzurra
-            iconSize: [38, 38],
-            iconAnchor: [19, 38],
-          });
-          
           <Marker position={position} icon={userIcon}>
             <Popup>📍 La tua posizione</Popup>
           </Marker>
