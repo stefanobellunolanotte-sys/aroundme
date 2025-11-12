@@ -85,7 +85,7 @@ const icons: Record<string, L.Icon> = {
 
 // 📍 Icona posizione utente
 const userIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/4876/4876905.png", // icona GPS azzurra
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png", // icona GPS azzurra
   iconSize: [38, 38],
   iconAnchor: [19, 38],
 });
