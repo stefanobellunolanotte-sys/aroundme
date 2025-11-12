@@ -85,13 +85,12 @@ const icons: Record<string, L.Icon> = {
 
 // 📍 Icona posizione utente
 const userIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png", // icona GPS azzurra
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/4876/4876905.png",
   iconSize: [38, 38],
   iconAnchor: [19, 38],
 });
 
 function App() {
-  // 🧠 Stati principali
   const [pois, setPois] = useState<Poi[]>([]);
   const [filteredPois, setFilteredPois] = useState<Poi[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -102,10 +101,28 @@ function App() {
   const [status, setStatus] = useState("Caricamento...");
   const [toast, setToast] = useState<string | null>(null);
   const [mode, setMode] = useState<"walking" | "auto">("walking");
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   const lastSpokenPOI = useRef<string | null>(null);
 
-  // 🧭 Ottieni posizione dinamicamente
+  // 🔓 Sblocca audio al primo tocco/click
+  useEffect(() => {
+    const unlock = () => {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
+      setAudioUnlocked(true);
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+    window.addEventListener("click", unlock);
+    window.addEventListener("touchstart", unlock);
+    return () => {
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+  }, []);
+
+  // 🧭 Geolocalizzazione dinamica
   useEffect(() => {
     if (!navigator.geolocation) {
       setStatus("Geolocalizzazione non supportata");
@@ -149,7 +166,7 @@ function App() {
     };
   }, [mode]);
 
-  // 📡 Carica POI da Supabase
+  // 📡 Caricamento POI da Supabase
   const loadPOI = async () => {
     const { data, error } = await supabase.rpc("get_poi_with_category");
     if (error) {
@@ -180,7 +197,7 @@ function App() {
     loadPOI();
   }, []);
 
-  // 📍 Calcola distanza (km)
+  // 📏 Calcolo distanza
   const calcDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -193,9 +210,9 @@ function App() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  // 🗣️ Narrazione automatica (entro 100 m)
+  // 🗣️ Narrazione automatica
   useEffect(() => {
-    if (!position || pois.length === 0) return;
+    if (!position || pois.length === 0 || !audioUnlocked) return;
 
     const nearby = pois.filter(
       (p) =>
@@ -216,9 +233,9 @@ function App() {
     } else {
       lastSpokenPOI.current = null;
     }
-  }, [position, pois]);
+  }, [position, pois, audioUnlocked]);
 
-  // 🔍 Filtri
+  // 🎚️ Filtri
   useEffect(() => {
     if (!position) return;
     let results = pois;
@@ -259,6 +276,26 @@ function App() {
   // 🌍 INTERFACCIA COMPLETA
   return (
     <div style={{ height: "100vh", width: "100vw" }}>
+      {/* 🔈 Messaggio per attivare audio */}
+      {!audioUnlocked && (
+        <div
+          style={{
+            position: "absolute",
+            top: "40%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "#000",
+            color: "#fff",
+            padding: "20px",
+            borderRadius: "12px",
+            textAlign: "center",
+            zIndex: 9999,
+          }}
+        >
+          🔊 Tocca lo schermo per attivare l’audio
+        </div>
+      )}
+
       {position && (
         <MapContainer center={position} zoom={9} style={{ height: "100%", width: "100%" }}>
           <TileLayer
@@ -266,12 +303,10 @@ function App() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {/* 📍 Posizione utente */}
           <Marker position={position} icon={userIcon}>
             <Popup>📍 La tua posizione</Popup>
           </Marker>
 
-          {/* 🔵 Cerchio del raggio di copertura */}
           {radius > 0 && (
             <Circle
               center={position}
@@ -280,7 +315,6 @@ function App() {
             />
           )}
 
-          {/* 📌 POI */}
           {filteredPois.map((p) => (
             <Marker
               key={p.id}
@@ -322,7 +356,7 @@ function App() {
         </MapContainer>
       )}
 
-      {/* 🎛️ CONTROLLI INTERFACCIA */}
+      {/* 🎛️ CONTROLLI */}
       <div
         style={{
           position: "absolute",
@@ -336,7 +370,6 @@ function App() {
           fontSize: "0.9rem",
         }}
       >
-        {/* 🚶‍♂️🚗 Toggle modalità */}
         <div style={{ marginBottom: "6px" }}>
           <label>🧭 Modalità: </label>
           <button
@@ -368,7 +401,7 @@ function App() {
           </button>
         </div>
 
-        {/* 🔍 Campo di ricerca */}
+        {/* 🔍 Ricerca */}
         <div style={{ marginBottom: "5px" }}>
           <label>🔍 Cerca: </label>
           <input
@@ -406,7 +439,6 @@ function App() {
           </select>
         </div>
 
-        {/* 🔁 Pulsanti */}
         <button onClick={loadPOI}>🔄 Ricarica POI</button>
         <button
           onClick={stopSpeech}
