@@ -266,7 +266,13 @@ function App() {
           />
 
           {/* 📍 Posizione utente */}
-          <Marker position={position}>
+          const userIcon = new L.Icon({
+            iconUrl: "https://cdn-icons-png.flaticon.com/512/4876/4876905.png", // icona GPS azzurra
+            iconSize: [38, 38],
+            iconAnchor: [19, 38],
+          });
+          
+          <Marker position={position} icon={userIcon}>
             <Popup>📍 La tua posizione</Popup>
           </Marker>
 
