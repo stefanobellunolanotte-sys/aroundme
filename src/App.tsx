@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from "react-leaflet";
 import { createClient } from "@supabase/supabase-js";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -90,6 +90,28 @@ const userIcon = new L.Icon({
   iconAnchor: [19, 38],
 });
 
+// -------------------- Recenter component --------------------
+// Componente interno che sposta la mappa quando `position` cambia,
+// ma solo se `follow` è true.
+function RecenterMap({
+  position,
+  follow,
+}: {
+  position: [number, number] | null;
+  follow: boolean;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (!map || !position) return;
+    if (follow) {
+      // Mantieni lo zoom corrente, ma centra la mappa sulla posizione
+      map.setView(position, map.getZoom(), { animate: true });
+    }
+  }, [map, position, follow]);
+  return null;
+}
+// ------------------------------------------------------------
+
 function App() {
   const [pois, setPois] = useState<Poi[]>([]);
   const [filteredPois, setFilteredPois] = useState<Poi[]>([]);
@@ -102,6 +124,7 @@ function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [mode, setMode] = useState<"walking" | "auto">("walking");
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [followMap, setFollowMap] = useState<boolean>(true); // <-- follow toggle
 
   const lastSpokenPOI = useRef<string | null>(null);
 
@@ -153,7 +176,7 @@ function App() {
 
     watchId = navigator.geolocation.watchPosition(updatePosition, handleError, options);
 
-    let pollInterval: NodeJS.Timeout | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
     if (mode === "auto") {
       pollInterval = setInterval(() => {
         navigator.geolocation.getCurrentPosition(updatePosition, handleError, options);
@@ -210,7 +233,7 @@ function App() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  // 🗣️ Narrazione automatica
+  // 🗣️ Narrazione automatica (entro ~100 m)
   useEffect(() => {
     if (!position || pois.length === 0 || !audioUnlocked) return;
 
@@ -297,7 +320,11 @@ function App() {
       )}
 
       {position && (
-        <MapContainer center={position} zoom={9} style={{ height: "100%", width: "100%" }}>
+        <MapContainer center={position} zoom={15} style={{ height: "100%", width: "100%" }}>
+          {/* RecenterMap centrerà la mappa ogni volta che `position` cambia,
+              ma solo se `followMap` è true */}
+          <RecenterMap position={position} follow={followMap} />
+
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -398,6 +425,23 @@ function App() {
             }}
           >
             🚗 Auto
+          </button>
+
+          {/* Toggle follow map */}
+          <button
+            onClick={() => setFollowMap((s) => !s)}
+            style={{
+              marginLeft: "8px",
+              background: followMap ? "#1976d2" : "#ddd",
+              color: followMap ? "white" : "black",
+              border: "none",
+              borderRadius: "6px",
+              padding: "4px 8px",
+              cursor: "pointer",
+            }}
+            title="Segui la posizione (toggle)"
+          >
+            {followMap ? "📍 Segui (On)" : "📍 Segui (Off)"}
           </button>
         </div>
 
