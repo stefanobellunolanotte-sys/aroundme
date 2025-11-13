@@ -27,7 +27,6 @@ function speak(text: string, setToast?: (msg: string | null) => void) {
     return;
   }
 
-  // 🔊 Bip prima della voce
   const context = new (window.AudioContext || (window as any).webkitAudioContext)();
   const oscillator = context.createOscillator();
   const gainNode = context.createGain();
@@ -39,7 +38,6 @@ function speak(text: string, setToast?: (msg: string | null) => void) {
   oscillator.start();
   oscillator.stop(context.currentTime + 0.2);
 
-  // 🎙️ Voce narrante
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "it-IT";
   utterance.rate = 1;
@@ -91,8 +89,6 @@ const userIcon = new L.Icon({
 });
 
 // -------------------- Recenter component --------------------
-// Componente interno che sposta la mappa quando `position` cambia,
-// ma solo se `follow` è true.
 function RecenterMap({
   position,
   follow,
@@ -103,10 +99,7 @@ function RecenterMap({
   const map = useMap();
   useEffect(() => {
     if (!map || !position) return;
-    if (follow) {
-      // Mantieni lo zoom corrente, ma centra la mappa sulla posizione
-      map.setView(position, map.getZoom(), { animate: true });
-    }
+    if (follow) map.setView(position, map.getZoom(), { animate: true });
   }, [map, position, follow]);
   return null;
 }
@@ -118,61 +111,17 @@ function App() {
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("Tutte");
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [radius, setRadius] = useState<number>(50); // km
+  const [radius, setRadius] = useState<number>(50);
   const [position, setPosition] = useState<[number, number] | null>(null);
   const [status, setStatus] = useState("Caricamento...");
   const [toast, setToast] = useState<string | null>(null);
   const [mode, setMode] = useState<"walking" | "auto">("walking");
   const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const [followMap, setFollowMap] = useState<boolean>(true); // <-- follow toggle
+  const [followMap, setFollowMap] = useState<boolean>(true);
 
   const lastSpokenPOI = useRef<string | null>(null);
 
-  // 🔓 Sblocca completamente audio e voce al primo tocco/click (compatibile iOS)
-  useEffect(() => {
-    const unlock = () => {
-      try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        if (ctx.state === "suspended") ctx.resume();
-  
-        // 🔊 Emissione suono immediata (richiesta da iOS)
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "square";
-        osc.frequency.value = 880;
-        gain.gain.value = 0.05;
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.2);
-  
-        // 🗣️ Riproduzione vocale immediata
-        const utterance = new SpeechSynthesisUtterance("Audio attivato");
-        utterance.lang = "it-IT";
-        utterance.rate = 1;
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
-  
-        setAudioUnlocked(true);
-  
-        // 🔒 Rimuove listener una volta sbloccato
-        window.removeEventListener("click", unlock);
-        window.removeEventListener("touchstart", unlock);
-      } catch (err) {
-        console.warn("Errore nello sblocco audio:", err);
-      }
-    };
-  
-    window.addEventListener("click", unlock, { once: true });
-    window.addEventListener("touchstart", unlock, { once: true });
-  
-    return () => {
-      window.removeEventListener("click", unlock);
-      window.removeEventListener("touchstart", unlock);
-    };
-  }, []);
-
-  // 🧭 Geolocalizzazione dinamica
+  // 🔓 Geolocalizzazione
   useEffect(() => {
     if (!navigator.geolocation) {
       setStatus("Geolocalizzazione non supportata");
@@ -184,9 +133,7 @@ function App() {
       const { latitude, longitude } = pos.coords;
       setPosition([latitude, longitude]);
       setStatus(
-        `Posizione aggiornata (${mode === "auto" ? "🚗" : "🚶‍♂️"}) ${latitude.toFixed(
-          5
-        )}, ${longitude.toFixed(5)}`
+        `Posizione aggiornata (${mode === "auto" ? "🚗" : "🚶‍♂️"}) ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
       );
     };
 
@@ -216,53 +163,33 @@ function App() {
     };
   }, [mode]);
 
-  // 🌙 Mantieni lo schermo sempre acceso mentre la webapp è attiva
+  // 🔋 Mantieni schermo acceso
   useEffect(() => {
     let wakeLock: any = null;
-
     const requestWakeLock = async () => {
       try {
         if ("wakeLock" in navigator && (navigator as any).wakeLock.request) {
           wakeLock = await (navigator as any).wakeLock.request("screen");
-          console.log("🔋 Wake Lock attivo: schermo sempre acceso");
-
-          wakeLock.addEventListener("release", () => {
-            console.log("⚠️ Wake Lock rilasciato (forse cambio tab o standby)");
-          });
-        } else {
-          console.warn("⚠️ Wake Lock API non supportata su questo dispositivo.");
-        }
+          console.log("🔋 Wake Lock attivo");
+          wakeLock.addEventListener("release", () => console.log("⚠️ Wake Lock rilasciato"));
+        } else console.warn("⚠️ Wake Lock non supportato");
       } catch (err) {
         console.error("Errore attivazione Wake Lock:", err);
       }
     };
-
     requestWakeLock();
-
-    // Se l’utente cambia tab o blocca il telefono, riattiva il lock al ritorno
     document.addEventListener("visibilitychange", () => {
-      if (wakeLock !== null && document.visibilityState === "visible") {
-        requestWakeLock();
-      }
+      if (wakeLock !== null && document.visibilityState === "visible") requestWakeLock();
     });
-
-    // Rilascia il lock quando il componente viene smontato
     return () => {
-      if (wakeLock) {
-        wakeLock.release().then(() => {
-          console.log("🔓 Wake Lock disattivato");
-        });
-      }
+      if (wakeLock) wakeLock.release().then(() => console.log("🔓 Wake Lock disattivato"));
     };
   }, []);
 
-  // 📡 Caricamento POI da Supabase
+  // 📡 Carica POI
   const loadPOI = async () => {
     const { data, error } = await supabase.rpc("get_poi_with_category");
-    if (error) {
-      console.error("Errore caricamento POI:", error);
-      return;
-    }
+    if (error) return console.error("Errore POI:", error);
 
     const parsed = data.map((p: any) => ({
       id: p.id,
@@ -271,23 +198,19 @@ function App() {
       category: p.category_name,
       elevation: p.elevation,
       image_url: p.image_url,
-      coordinates: {
-        lat: p.geojson.coordinates[1],
-        lon: p.geojson.coordinates[0],
-      },
+      coordinates: { lat: p.geojson.coordinates[1], lon: p.geojson.coordinates[0] },
     }));
 
     setPois(parsed);
     setFilteredPois(parsed);
     setCategories(["Tutte", ...Array.from(new Set(parsed.map((p: any) => p.category)))]);
-    setStatus(`✅ Caricati ${parsed.length} punti da Supabase`);
+    setStatus(`✅ Caricati ${parsed.length} punti`);
   };
-
   useEffect(() => {
     loadPOI();
   }, []);
 
-  // 📏 Calcolo distanza
+  // 📏 Distanza
   const calcDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -300,52 +223,34 @@ function App() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  // 🗣️ Narrazione automatica (entro ~100 m)
+  // 🗣️ Narrazione automatica
   useEffect(() => {
     if (!position || pois.length === 0 || !audioUnlocked) return;
-
     const nearby = pois.filter(
-      (p) =>
-        calcDistance(position[0], position[1], p.coordinates.lat, p.coordinates.lon) <=
-        0.1
+      (p) => calcDistance(position[0], position[1], p.coordinates.lat, p.coordinates.lon) <= 0.1
     );
-
     if (nearby.length > 0) {
       const poi = nearby[0];
       if (lastSpokenPOI.current !== poi.name) {
         lastSpokenPOI.current = poi.name;
-
         const description = `${poi.name}, categoria ${poi.category}. ${
           poi.elevation ? `Altitudine ${poi.elevation} metri. ` : ""
         }${poi.description ?? ""}`;
         speak(description, setToast);
       }
-    } else {
-      lastSpokenPOI.current = null;
-    }
+    } else lastSpokenPOI.current = null;
   }, [position, pois, audioUnlocked]);
 
   // 🎚️ Filtri
   useEffect(() => {
     if (!position) return;
     let results = pois;
-
-    if (selectedCategory !== "Tutte") {
-      results = results.filter((p) => p.category === selectedCategory);
-    }
-    if (searchTerm.trim()) {
-      results = results.filter((p) =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    if (radius !== 0) {
+    if (selectedCategory !== "Tutte") results = results.filter((p) => p.category === selectedCategory);
+    if (searchTerm.trim()) results = results.filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    if (radius !== 0)
       results = results.filter(
-        (p) =>
-          calcDistance(position[0], position[1], p.coordinates.lat, p.coordinates.lon) <=
-          radius
+        (p) => calcDistance(position[0], position[1], p.coordinates.lat, p.coordinates.lon) <= radius
       );
-    }
-
     setFilteredPois(results);
   }, [selectedCategory, searchTerm, radius, pois, position]);
 
@@ -355,7 +260,6 @@ function App() {
     }${poi.description ?? ""}`;
     speak(description, setToast);
   };
-
   const stopSpeech = () => {
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -363,44 +267,63 @@ function App() {
     }
   };
 
-  // 🌍 INTERFACCIA COMPLETA
+  // 🌍 INTERFACCIA
   return (
     <div style={{ height: "100vh", width: "100vw" }}>
-      {/* 🔈 Messaggio per attivare audio */}
+      {/* 🔈 Bottone per attivare audio (compatibile Android/iOS) */}
       {!audioUnlocked && (
-        <div
+        <button
+          onClick={() => {
+            try {
+              const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              if (ctx.state === "suspended") ctx.resume();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              gain.gain.value = 0.1;
+              osc.frequency.value = 880;
+              osc.start();
+              osc.stop(ctx.currentTime + 0.2);
+              const utterance = new SpeechSynthesisUtterance("Audio attivato");
+              utterance.lang = "it-IT";
+              window.speechSynthesis.cancel();
+              window.speechSynthesis.speak(utterance);
+              setAudioUnlocked(true);
+            } catch (e) {
+              console.warn("Errore sblocco audio:", e);
+            }
+          }}
           style={{
             position: "absolute",
             top: "40%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            background: "#000",
+            background: "#2196F3",
             color: "#fff",
-            padding: "20px",
-            borderRadius: "12px",
-            textAlign: "center",
+            fontSize: "1.2rem",
+            padding: "18px 28px",
+            borderRadius: "14px",
+            border: "none",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
             zIndex: 9999,
+            cursor: "pointer",
           }}
         >
-          🔊 Tocca lo schermo per attivare l’audio
-        </div>
+          🔊 Tocca per attivare l’audio
+        </button>
       )}
 
       {position && (
         <MapContainer center={position} zoom={15} style={{ height: "100%", width: "100%" }}>
-          {/* RecenterMap centrerà la mappa ogni volta che `position` cambia,
-              ma solo se `followMap` è true */}
           <RecenterMap position={position} follow={followMap} />
-
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-
           <Marker position={position} icon={userIcon}>
             <Popup>📍 La tua posizione</Popup>
           </Marker>
-
           {radius > 0 && (
             <Circle
               center={position}
@@ -408,15 +331,11 @@ function App() {
               pathOptions={{ color: "blue", fillColor: "#add8e6", fillOpacity: 0.2 }}
             />
           )}
-
           {filteredPois.map((p) => (
-            <Marker
-              key={p.id}
-              position={[p.coordinates.lat, p.coordinates.lon]}
-              icon={icons[p.category] || icons.Default}
-            >
+            <Marker key={p.id} position={[p.coordinates.lat, p.coordinates.lon]} icon={icons[p.category] || icons.Default}>
               <Popup>
-                <b>{p.name}</b> <br />
+                <b>{p.name}</b>
+                <br />
                 {p.elevation && <span>🏔️ Altitudine: {p.elevation} m<br /></span>}
                 {p.image_url && (
                   <img
@@ -493,8 +412,6 @@ function App() {
           >
             🚗 Auto
           </button>
-
-          {/* Toggle follow map */}
           <button
             onClick={() => setFollowMap((s) => !s)}
             style={{
@@ -526,10 +443,7 @@ function App() {
         {/* 📂 Categoria */}
         <div style={{ marginBottom: "5px" }}>
           <label>📂 Categoria: </label>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-          >
+          <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
             {categories.map((cat) => (
               <option key={cat}>{cat}</option>
             ))}
@@ -565,7 +479,6 @@ function App() {
         >
           ⏹️ Ferma voce
         </button>
-
         <div style={{ marginTop: "4px", fontSize: "0.9em" }}>{status}</div>
       </div>
 
