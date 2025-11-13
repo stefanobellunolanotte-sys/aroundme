@@ -128,17 +128,45 @@ function App() {
 
   const lastSpokenPOI = useRef<string | null>(null);
 
-  // 🔓 Sblocca audio al primo tocco/click
+  // 🔓 Sblocca completamente audio e voce al primo tocco/click
   useEffect(() => {
     const unlock = () => {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      if (ctx.state === "suspended") ctx.resume();
-      setAudioUnlocked(true);
-      window.removeEventListener("click", unlock);
-      window.removeEventListener("touchstart", unlock);
+      try {
+        // 🔊 Sblocca contesto audio
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        if (ctx.state === "suspended") ctx.resume();
+
+        // 🔈 Emetti un brevissimo suono per garantire il wake-up del canale audio
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = 440;
+        gain.gain.value = 0.05;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+  
+        // 🗣️ Emissione vocale minima per sbloccare speechSynthesis
+        const utterance = new SpeechSynthesisUtterance("Audio attivato");
+        utterance.lang = "it-IT";
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+  
+        // 🔓 Ora è sbloccato tutto
+        setAudioUnlocked(true);
+  
+        // Rimuovi listener dopo il primo click
+        window.removeEventListener("click", unlock);
+        window.removeEventListener("touchstart", unlock);
+      } catch (err) {
+        console.warn("Errore nello sblocco audio:", err);
+      }
     };
+  
     window.addEventListener("click", unlock);
     window.addEventListener("touchstart", unlock);
+  
     return () => {
       window.removeEventListener("click", unlock);
       window.removeEventListener("touchstart", unlock);
