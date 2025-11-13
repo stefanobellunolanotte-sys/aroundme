@@ -217,6 +217,46 @@ function App() {
     };
   }, [mode]);
 
+  // 🌙 Mantieni lo schermo sempre acceso mentre la webapp è attiva
+  useEffect(() => {
+    let wakeLock: any = null;
+
+    const requestWakeLock = async () => {
+      try {
+        if ("wakeLock" in navigator && (navigator as any).wakeLock.request) {
+          wakeLock = await (navigator as any).wakeLock.request("screen");
+          console.log("🔋 Wake Lock attivo: schermo sempre acceso");
+
+          wakeLock.addEventListener("release", () => {
+            console.log("⚠️ Wake Lock rilasciato (forse cambio tab o standby)");
+          });
+        } else {
+          console.warn("⚠️ Wake Lock API non supportata su questo dispositivo.");
+        }
+      } catch (err) {
+        console.error("Errore attivazione Wake Lock:", err);
+      }
+    };
+
+    requestWakeLock();
+
+    // Se l’utente cambia tab o blocca il telefono, riattiva il lock al ritorno
+    document.addEventListener("visibilitychange", () => {
+      if (wakeLock !== null && document.visibilityState === "visible") {
+        requestWakeLock();
+      }
+    });
+
+    // Rilascia il lock quando il componente viene smontato
+    return () => {
+      if (wakeLock) {
+        wakeLock.release().then(() => {
+          console.log("🔓 Wake Lock disattivato");
+        });
+      }
+    };
+  }, []);
+
   // 📡 Caricamento POI da Supabase
   const loadPOI = async () => {
     const { data, error } = await supabase.rpc("get_poi_with_category");
