@@ -128,35 +128,34 @@ function App() {
 
   const lastSpokenPOI = useRef<string | null>(null);
 
-  // 🔓 Sblocca completamente audio e voce al primo tocco/click
+  // 🔓 Sblocca completamente audio e voce al primo tocco/click (compatibile iOS)
   useEffect(() => {
     const unlock = () => {
       try {
-        // 🔊 Sblocca contesto audio
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         if (ctx.state === "suspended") ctx.resume();
-
-        // 🔈 Emetti un brevissimo suono per garantire il wake-up del canale audio
+  
+        // 🔊 Emissione suono immediata (richiesta da iOS)
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = 440;
+        osc.type = "square";
+        osc.frequency.value = 880;
         gain.gain.value = 0.05;
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start();
-        osc.stop(ctx.currentTime + 0.15);
+        osc.stop(ctx.currentTime + 0.2);
   
-        // 🗣️ Emissione vocale minima per sbloccare speechSynthesis
+        // 🗣️ Riproduzione vocale immediata
         const utterance = new SpeechSynthesisUtterance("Audio attivato");
         utterance.lang = "it-IT";
+        utterance.rate = 1;
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
   
-        // 🔓 Ora è sbloccato tutto
         setAudioUnlocked(true);
   
-        // Rimuovi listener dopo il primo click
+        // 🔒 Rimuove listener una volta sbloccato
         window.removeEventListener("click", unlock);
         window.removeEventListener("touchstart", unlock);
       } catch (err) {
@@ -164,8 +163,8 @@ function App() {
       }
     };
   
-    window.addEventListener("click", unlock);
-    window.addEventListener("touchstart", unlock);
+    window.addEventListener("click", unlock, { once: true });
+    window.addEventListener("touchstart", unlock, { once: true });
   
     return () => {
       window.removeEventListener("click", unlock);
