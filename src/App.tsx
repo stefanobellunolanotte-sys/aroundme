@@ -163,28 +163,86 @@ function App() {
     };
   }, [mode]);
 
-  // 🔋 Mantieni schermo acceso
-  useEffect(() => {
-    let wakeLock: any = null;
-    const requestWakeLock = async () => {
+  // 🔋 Mantieni schermo acceso (Wake Lock + Fallback iOS)
+useEffect(() => {
+  let wakeLock: any = null;
+
+  const requestWakeLock = async () => {
+    try {
+      if ("wakeLock" in navigator && (navigator as any).wakeLock.request) {
+        wakeLock = await (navigator as any).wakeLock.request("screen");
+        console.log("🔋 Wake Lock attivo");
+        wakeLock.addEventListener("release", () =>
+          console.log("⚠️ Wake Lock rilasciato")
+        );
+      } else {
+        console.warn("⚠️ Wake Lock non supportato, controllo fallback...");
+      }
+    } catch (err) {
+      console.error("Errore attivazione Wake Lock:", err);
+    }
+  };
+
+  requestWakeLock();
+
+  // --- Fallback iOS via video invisibile ---
+  const isApple = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isApple) {
+    console.log("🍏 iOS rilevato → Attivo fallback video invisibile");
+
+    const video = document.createElement("video");
+    video.src =
+      "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDFtcDQyaXNvbWF2YzEAAAAIZnJlZQAAACBtZGF0AAAAAA==";
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.style.width = "1px";
+    video.style.height = "1px";
+    video.style.opacity = "0";
+    video.style.position = "fixed";
+    video.style.top = "0";
+    document.body.appendChild(video);
+
+    const startVideo = async () => {
       try {
-        if ("wakeLock" in navigator && (navigator as any).wakeLock.request) {
-          wakeLock = await (navigator as any).wakeLock.request("screen");
-          console.log("🔋 Wake Lock attivo");
-          wakeLock.addEventListener("release", () => console.log("⚠️ Wake Lock rilasciato"));
-        } else console.warn("⚠️ Wake Lock non supportato");
+        await video.play();
+        console.log("📺 Video invisibile attivo (iOS screen-on)");
       } catch (err) {
-        console.error("Errore attivazione Wake Lock:", err);
+        console.warn("⚠️ iOS: impossibile avviare video invisibile:", err);
       }
     };
-    requestWakeLock();
-    document.addEventListener("visibilitychange", () => {
-      if (wakeLock !== null && document.visibilityState === "visible") requestWakeLock();
-    });
-    return () => {
-      if (wakeLock) wakeLock.release().then(() => console.log("🔓 Wake Lock disattivato"));
+
+    startVideo();
+
+    // Riavvia il video quando si torna visibili
+    const visibilityHandler = () => {
+      if (document.visibilityState === "visible") startVideo();
     };
-  }, []);
+
+    document.addEventListener("visibilitychange", visibilityHandler);
+
+    // Pulizia
+    return () => {
+      document.removeEventListener("visibilitychange", visibilityHandler);
+      video.pause();
+      video.remove();
+      console.log("🛑 Video invisibile rimosso (iOS)");
+    };
+  }
+
+  // --- Gestione normale per Android / desktop ---
+  document.addEventListener("visibilitychange", () => {
+    if (wakeLock !== null && document.visibilityState === "visible") {
+      requestWakeLock();
+    }
+  });
+
+  return () => {
+    if (wakeLock) {
+      wakeLock.release().then(() => console.log("🔓 Wake Lock disattivato"));
+    }
+  };
+}, []);
 
   // 📡 Carica POI
   const loadPOI = async () => {
