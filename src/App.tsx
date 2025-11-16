@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
-// 🔧 CONFIGURA QUI I TUOI DATI SUPABASE
+// 🔧 CONFIG SUPABASE
 const supabaseUrl = "https://hdemlowgkhcnepgbeehk.supabase.co";
 const supabaseKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkZW1sb3dna2hjbmVwZ2JlZWhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NDA1NjUsImV4cCI6MjA3NzIxNjU2NX0.a7LyKjmiwal9s9k6IYrNwgZeZd38rc5H3NVrz-RSf_I";
@@ -20,32 +20,29 @@ type Poi = {
   coordinates: { lat: number; lon: number };
 };
 
-// 🗣️ Funzione helper per la sintesi vocale + bip sonoro
+// 🗣️ Sintesi vocale
 function speak(text: string, setToast?: (msg: string | null) => void) {
   if (!("speechSynthesis" in window)) {
-    alert("La sintesi vocale non è supportata su questo browser.");
+    alert("La sintesi vocale non è supportata");
     return;
   }
 
-  const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const oscillator = context.createOscillator();
-  const gainNode = context.createGain();
-  oscillator.connect(gainNode);
-  gainNode.connect(context.destination);
-  oscillator.type = "sine";
-  oscillator.frequency.setValueAtTime(880, context.currentTime);
-  gainNode.gain.setValueAtTime(0.1, context.currentTime);
-  oscillator.start();
-  oscillator.stop(context.currentTime + 0.2);
+  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  gain.gain.value = 0.1;
+  osc.frequency.value = 880;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.2);
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "it-IT";
   utterance.rate = 1;
   window.speechSynthesis.cancel();
 
-  setTimeout(() => {
-    window.speechSynthesis.speak(utterance);
-  }, 250);
+  setTimeout(() => window.speechSynthesis.speak(utterance), 250);
 
   if (setToast) {
     setToast("🎧 Sto leggendo...");
@@ -53,7 +50,7 @@ function speak(text: string, setToast?: (msg: string | null) => void) {
   }
 }
 
-// 🔹 Icone per categoria
+// 🔹 Icone POI
 const icons: Record<string, L.Icon> = {
   Montagna: new L.Icon({
     iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
@@ -88,7 +85,7 @@ const userIcon = new L.Icon({
   iconAnchor: [19, 38],
 });
 
-// -------------------- Recenter component --------------------
+// -------------------- RecenterMap --------------------
 function RecenterMap({
   position,
   follow,
@@ -103,7 +100,7 @@ function RecenterMap({
   }, [map, position, follow]);
   return null;
 }
-// ------------------------------------------------------------
+// -----------------------------------------------------
 
 function App() {
   const [pois, setPois] = useState<Poi[]>([]);
@@ -129,11 +126,14 @@ function App() {
     }
 
     let watchId: number;
+
     const updatePosition = (pos: GeolocationPosition) => {
       const { latitude, longitude } = pos.coords;
       setPosition([latitude, longitude]);
       setStatus(
-        `Posizione aggiornata (${mode === "auto" ? "🚗" : "🚶‍♂️"}) ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+        `Posizione aggiornata (${mode === "auto" ? "🚗" : "🚶‍♂️"}) ${latitude.toFixed(
+          5
+        )}, ${longitude.toFixed(5)}`
       );
     };
 
@@ -163,86 +163,34 @@ function App() {
     };
   }, [mode]);
 
-  // 🔋 Mantieni schermo acceso (Wake Lock + Fallback iOS)
-useEffect(() => {
-  let wakeLock: any = null;
+  // 🔋 Mantieni schermo acceso (solo Wakelock Android)
+  useEffect(() => {
+    let wakeLock: any = null;
 
-  const requestWakeLock = async () => {
-    try {
-      if ("wakeLock" in navigator && (navigator as any).wakeLock.request) {
-        wakeLock = await (navigator as any).wakeLock.request("screen");
-        console.log("🔋 Wake Lock attivo");
-        wakeLock.addEventListener("release", () =>
-          console.log("⚠️ Wake Lock rilasciato")
-        );
-      } else {
-        console.warn("⚠️ Wake Lock non supportato, controllo fallback...");
-      }
-    } catch (err) {
-      console.error("Errore attivazione Wake Lock:", err);
-    }
-  };
-
-  requestWakeLock();
-
-  // --- Fallback iOS via video invisibile ---
-  const isApple = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isApple) {
-    console.log("🍏 iOS rilevato → Attivo fallback video invisibile");
-
-    const video = document.createElement("video");
-    video.src =
-      "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDFtcDQyaXNvbWF2YzEAAAAIZnJlZQAAACBtZGF0AAAAAA==";
-    video.muted = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.style.width = "1px";
-    video.style.height = "1px";
-    video.style.opacity = "0";
-    video.style.position = "fixed";
-    video.style.top = "0";
-    document.body.appendChild(video);
-
-    const startVideo = async () => {
+    const requestWakeLock = async () => {
       try {
-        await video.play();
-        console.log("📺 Video invisibile attivo (iOS screen-on)");
+        if ("wakeLock" in navigator && (navigator as any).wakeLock.request) {
+          wakeLock = await (navigator as any).wakeLock.request("screen");
+          console.log("🔋 Wake Lock attivo");
+          wakeLock.addEventListener("release", () =>
+            console.log("⚠️ Wake Lock rilasciato")
+          );
+        }
       } catch (err) {
-        console.warn("⚠️ iOS: impossibile avviare video invisibile:", err);
+        console.error("Errore Wake Lock:", err);
       }
     };
 
-    startVideo();
+    requestWakeLock();
 
-    // Riavvia il video quando si torna visibili
-    const visibilityHandler = () => {
-      if (document.visibilityState === "visible") startVideo();
-    };
+    document.addEventListener("visibilitychange", () => {
+      if (wakeLock !== null && document.visibilityState === "visible") requestWakeLock();
+    });
 
-    document.addEventListener("visibilitychange", visibilityHandler);
-
-    // Pulizia
     return () => {
-      document.removeEventListener("visibilitychange", visibilityHandler);
-      video.pause();
-      video.remove();
-      console.log("🛑 Video invisibile rimosso (iOS)");
+      if (wakeLock) wakeLock.release().then(() => console.log("🔓 Wake Lock disattivato"));
     };
-  }
-
-  // --- Gestione normale per Android / desktop ---
-  document.addEventListener("visibilitychange", () => {
-    if (wakeLock !== null && document.visibilityState === "visible") {
-      requestWakeLock();
-    }
-  });
-
-  return () => {
-    if (wakeLock) {
-      wakeLock.release().then(() => console.log("🔓 Wake Lock disattivato"));
-    }
-  };
-}, []);
+  }, []);
 
   // 📡 Carica POI
   const loadPOI = async () => {
@@ -261,9 +209,10 @@ useEffect(() => {
 
     setPois(parsed);
     setFilteredPois(parsed);
-    setCategories(["Tutte", ...Array.from(new Set(parsed.map((p: any) => p.category)))]);
+    setCategories(["Tutte", ...Array.from(new Set(parsed.map((p) => p.category)))]);
     setStatus(`✅ Caricati ${parsed.length} punti`);
   };
+
   useEffect(() => {
     loadPOI();
   }, []);
@@ -284,31 +233,50 @@ useEffect(() => {
   // 🗣️ Narrazione automatica
   useEffect(() => {
     if (!position || pois.length === 0 || !audioUnlocked) return;
+
     const nearby = pois.filter(
-      (p) => calcDistance(position[0], position[1], p.coordinates.lat, p.coordinates.lon) <= 0.1
+      (p) =>
+        calcDistance(position[0], position[1], p.coordinates.lat, p.coordinates.lon) <=
+        0.1
     );
+
     if (nearby.length > 0) {
       const poi = nearby[0];
       if (lastSpokenPOI.current !== poi.name) {
         lastSpokenPOI.current = poi.name;
+
         const description = `${poi.name}, categoria ${poi.category}. ${
           poi.elevation ? `Altitudine ${poi.elevation} metri. ` : ""
         }${poi.description ?? ""}`;
+
         speak(description, setToast);
       }
-    } else lastSpokenPOI.current = null;
+    } else {
+      lastSpokenPOI.current = null;
+    }
   }, [position, pois, audioUnlocked]);
 
   // 🎚️ Filtri
   useEffect(() => {
     if (!position) return;
+
     let results = pois;
-    if (selectedCategory !== "Tutte") results = results.filter((p) => p.category === selectedCategory);
-    if (searchTerm.trim()) results = results.filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    if (selectedCategory !== "Tutte")
+      results = results.filter((p) => p.category === selectedCategory);
+
+    if (searchTerm.trim())
+      results = results.filter((p) =>
+        p.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
     if (radius !== 0)
       results = results.filter(
-        (p) => calcDistance(position[0], position[1], p.coordinates.lat, p.coordinates.lon) <= radius
+        (p) =>
+          calcDistance(position[0], position[1], p.coordinates.lat, p.coordinates.lon) <=
+          radius
       );
+
     setFilteredPois(results);
   }, [selectedCategory, searchTerm, radius, pois, position]);
 
@@ -318,6 +286,7 @@ useEffect(() => {
     }${poi.description ?? ""}`;
     speak(description, setToast);
   };
+
   const stopSpeech = () => {
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -328,26 +297,64 @@ useEffect(() => {
   // 🌍 INTERFACCIA
   return (
     <div style={{ height: "100vh", width: "100vw" }}>
-      {/* 🔈 Bottone per attivare audio (compatibile Android/iOS) */}
+      {/* 🔈 BOTTONE SBLOCCO AUDIO + FALLBACK iOS */}
       {!audioUnlocked && (
         <button
           onClick={() => {
             try {
-              const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              // --- AUDIO UNLOCK ---
+              const ctx = new (window.AudioContext ||
+                (window as any).webkitAudioContext)();
               if (ctx.state === "suspended") ctx.resume();
+
               const osc = ctx.createOscillator();
               const gain = ctx.createGain();
-              osc.connect(gain);
-              gain.connect(ctx.destination);
               gain.gain.value = 0.1;
               osc.frequency.value = 880;
+              osc.connect(gain);
+              gain.connect(ctx.destination);
               osc.start();
               osc.stop(ctx.currentTime + 0.2);
+
               const utterance = new SpeechSynthesisUtterance("Audio attivato");
               utterance.lang = "it-IT";
               window.speechSynthesis.cancel();
               window.speechSynthesis.speak(utterance);
+
               setAudioUnlocked(true);
+
+              // --- FALLBACK iOS ---
+              const isApple = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+              if (isApple) {
+                console.log("🍏 iOS: avvio video invisibile dopo tap");
+
+                const video = document.createElement("video");
+                video.src =
+                  "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDFtcDQyaXNvbWF2YzEAAAAIZnJlZQAAACBtZGF0AAAAAA==";
+                video.muted = true;
+                video.loop = true;
+                video.playsInline = true;
+                video.style.width = "1px";
+                video.style.height = "1px";
+                video.style.opacity = "0";
+                video.style.position = "fixed";
+                video.style.top = "0";
+                document.body.appendChild(video);
+
+                video.play().catch(() => {});
+
+                const visibilityHandler = () => {
+                  if (document.visibilityState === "visible") {
+                    video.play().catch(() => {});
+                  }
+                };
+
+                document.addEventListener("visibilitychange", visibilityHandler);
+
+                setTimeout(() => {
+                  document.removeEventListener("visibilitychange", visibilityHandler);
+                }, 2000);
+              }
             } catch (e) {
               console.warn("Errore sblocco audio:", e);
             }
@@ -371,16 +378,20 @@ useEffect(() => {
           🔊 Tocca per attivare l’audio
         </button>
       )}
+
       {position && (
         <MapContainer center={position} zoom={15} style={{ height: "100%", width: "100%" }}>
           <RecenterMap position={position} follow={followMap} />
+
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
+            attribution='&copy; OpenStreetMap'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+
           <Marker position={position} icon={userIcon}>
             <Popup>📍 La tua posizione</Popup>
           </Marker>
+
           {radius > 0 && (
             <Circle
               center={position}
@@ -388,17 +399,30 @@ useEffect(() => {
               pathOptions={{ color: "blue", fillColor: "#add8e6", fillOpacity: 0.2 }}
             />
           )}
+
           {filteredPois.map((p) => (
-            <Marker key={p.id} position={[p.coordinates.lat, p.coordinates.lon]} icon={icons[p.category] || icons.Default}>
+            <Marker
+              key={p.id}
+              position={[p.coordinates.lat, p.coordinates.lon]}
+              icon={icons[p.category] || icons.Default}
+            >
               <Popup>
                 <b>{p.name}</b>
                 <br />
-                {p.elevation && <span>🏔️ Altitudine: {p.elevation} m<br /></span>}
+                {p.elevation && (
+                  <span>
+                    🏔️ Altitudine: {p.elevation} m<br />
+                  </span>
+                )}
                 {p.image_url && (
                   <img
                     src={p.image_url}
                     alt={p.name}
-                    style={{ width: "100px", borderRadius: "8px", margin: "4px 0" }}
+                    style={{
+                      width: "100px",
+                      borderRadius: "8px",
+                      margin: "4px 0",
+                    }}
                   />
                 )}
                 <br />
@@ -456,6 +480,7 @@ useEffect(() => {
           >
             🚶‍♂️ A piedi
           </button>
+
           <button
             onClick={() => setMode("auto")}
             style={{
@@ -469,6 +494,7 @@ useEffect(() => {
           >
             🚗 Auto
           </button>
+
           <button
             onClick={() => setFollowMap((s) => !s)}
             style={{
@@ -480,7 +506,6 @@ useEffect(() => {
               padding: "4px 8px",
               cursor: "pointer",
             }}
-            title="Segui la posizione (toggle)"
           >
             {followMap ? "📍 Segui (On)" : "📍 Segui (Off)"}
           </button>
@@ -500,7 +525,10 @@ useEffect(() => {
         {/* 📂 Categoria */}
         <div style={{ marginBottom: "5px" }}>
           <label>📂 Categoria: </label>
-          <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+          >
             {categories.map((cat) => (
               <option key={cat}>{cat}</option>
             ))}
@@ -522,6 +550,7 @@ useEffect(() => {
         </div>
 
         <button onClick={loadPOI}>🔄 Ricarica POI</button>
+
         <button
           onClick={stopSpeech}
           style={{
@@ -536,6 +565,7 @@ useEffect(() => {
         >
           ⏹️ Ferma voce
         </button>
+
         <div style={{ marginTop: "4px", fontSize: "0.9em" }}>{status}</div>
       </div>
 
