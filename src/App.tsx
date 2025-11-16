@@ -333,65 +333,21 @@ useEffect(() => {
         <button
           onClick={() => {
             try {
-              // --- AUDIO UNLOCK ---
               const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
               if (ctx.state === "suspended") ctx.resume();
-      
-              // piccolo beep
               const osc = ctx.createOscillator();
               const gain = ctx.createGain();
-              gain.gain.value = 0.1;
-              osc.frequency.value = 880;
               osc.connect(gain);
               gain.connect(ctx.destination);
+              gain.gain.value = 0.1;
+              osc.frequency.value = 880;
               osc.start();
               osc.stop(ctx.currentTime + 0.2);
-      
-              // voce
               const utterance = new SpeechSynthesisUtterance("Audio attivato");
               utterance.lang = "it-IT";
               window.speechSynthesis.cancel();
               window.speechSynthesis.speak(utterance);
-      
               setAudioUnlocked(true);
-      
-              // --- FALLBACK iOS: VIDEO INVISIBILE PER TENERE LO SCHERMO SEMPRE ACCESO ---
-              const isApple = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-              if (isApple) {
-                console.log("🍏 iOS: avvio video invisibile dopo tap utente");
-      
-                const video = document.createElement("video");
-                video.src =
-                  "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDFtcDQyaXNvbWF2YzEAAAAIZnJlZQAAACBtZGF0AAAAAA==";
-                video.muted = true;
-                video.loop = true;
-                video.playsInline = true;
-                video.style.width = "1px";
-                video.style.height = "1px";
-                video.style.opacity = "0";
-                video.style.position = "fixed";
-                video.style.top = "0";
-                document.body.appendChild(video);
-      
-                video.play().then(() => {
-                  console.log("📺 iOS fallback video avviato");
-                }).catch(err => {
-                  console.warn("⚠️ iOS: impossibile avviare video invisibile:", err);
-                });
-      
-                // riattiva se si torna visibili
-                const visibilityHandler = () => {
-                  if (document.visibilityState === "visible") {
-                    video.play().catch(() => {});
-                  }
-                };
-                document.addEventListener("visibilitychange", visibilityHandler);
-      
-                // cleanup automatico quando l’audio è già sbloccato
-                setTimeout(() => {
-                  document.removeEventListener("visibilitychange", visibilityHandler);
-                }, 2000);
-              }
             } catch (e) {
               console.warn("Errore sblocco audio:", e);
             }
@@ -415,26 +371,6 @@ useEffect(() => {
           🔊 Tocca per attivare l’audio
         </button>
       )}
-          style={{
-            position: "absolute",
-            top: "40%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            background: "#2196F3",
-            color: "#fff",
-            fontSize: "1.2rem",
-            padding: "18px 28px",
-            borderRadius: "14px",
-            border: "none",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-            zIndex: 9999,
-            cursor: "pointer",
-          }}
-        >
-          🔊 Tocca per attivare l’audio
-        </button>
-      )}
-
       {position && (
         <MapContainer center={position} zoom={15} style={{ height: "100%", width: "100%" }}>
           <RecenterMap position={position} follow={followMap} />
